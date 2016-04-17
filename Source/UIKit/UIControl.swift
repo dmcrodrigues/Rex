@@ -35,8 +35,33 @@ extension UIControl {
     public var rex_highlighted: MutableProperty<Bool> {
         return associatedProperty(self, key: &highlightedKey, initial: { $0.highlighted }, setter: { $0.highlighted = $1 })
     }
+
+    /// Exposes a property that binds an action into a control's value changed event. The
+    /// action is set as a target of the control for `ValueChanged` events. When property
+    /// changes occur the previous action is removed as a target. This also binds the
+    /// enabled state of the action to the `rex_enabled` property on the control.
+    public var rex_valueChanged: MutableProperty<CocoaAction> {
+        return associatedObject(self, key: &valueChangedKey, initial: { [weak self] _ in
+            let initial = CocoaAction.rex_disabled
+            let property = MutableProperty(initial)
+
+            property.producer
+                .combinePrevious(initial)
+                .start(Observer(next: { previous, next in
+                    self?.removeTarget(previous, action: CocoaAction.selector, forControlEvents: .ValueChanged)
+                    self?.addTarget(next, action: CocoaAction.selector, forControlEvents: .ValueChanged)
+                }))
+
+            if let strongSelf = self {
+                strongSelf.rex_enabled <~ property.producer.flatMap(.Latest) { $0.rex_enabledProducer }
+            }
+
+            return property
+        })
+    }
 }
 
 private var enabledKey: UInt8 = 0
 private var selectedKey: UInt8 = 0
 private var highlightedKey: UInt8 = 0
+private var valueChangedKey: UInt8 = 0
